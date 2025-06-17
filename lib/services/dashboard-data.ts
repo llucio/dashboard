@@ -372,27 +372,48 @@ export class DashboardDataService {
       const agencyTimelineData: Record<string, TimelineDataPoint[]> = {};
       const agencyAwardsData: Record<string, AwardData[]> = {};
 
-      for (const agency of agencyData.results) {
-        try {
-          console.log(`📈 Fetching timeline and awards for agency: "${agency.name}"`);
+      await Promise.all(
+        agencyData.results.map(async (agency) => {
+          try {
+            console.log(
+              `📈 Fetching timeline and awards for agency: "${agency.name}"`
+            );
 
-          // Fetch agency-specific timeline and awards in parallel
-          const [agencyTimeline, agencyAwards] = await Promise.all([
-            this.getFilteredTimelineData(marketName, agency.name, null, startDate, endDate, isQuickSelection),
-            this.getFilteredAwardsData(marketName, agency.name, null, startDate, endDate, isQuickSelection)
-          ]);
+            const [agencyTimeline, agencyAwards] = await Promise.all([
+              this.getFilteredTimelineData(
+                marketName,
+                agency.name,
+                null,
+                startDate,
+                endDate,
+                isQuickSelection
+              ),
+              this.getFilteredAwardsData(
+                marketName,
+                agency.name,
+                null,
+                startDate,
+                endDate,
+                isQuickSelection
+              )
+            ]);
 
-          agencyTimelineData[agency.name] = agencyTimeline.results;
-          agencyAwardsData[agency.name] = agencyAwards.results;
+            agencyTimelineData[agency.name] = agencyTimeline.results;
+            agencyAwardsData[agency.name] = agencyAwards.results;
 
-          console.log(`✅ "${agency.name}": ${agencyTimeline.results.length} timeline points, ${agencyAwards.results.length} awards`);
-          console.log(`✅ Agency timeline data sample:`, agencyTimeline.results.slice(0, 2));
-        } catch (error) {
-          console.error(`❌ Error fetching data for agency ${agency.name}:`, error);
-          agencyTimelineData[agency.name] = [];
-          agencyAwardsData[agency.name] = [];
-        }
-      }
+            console.log(
+              `✅ "${agency.name}": ${agencyTimeline.results.length} timeline points, ${agencyAwards.results.length} awards`
+            );
+          } catch (error) {
+            console.error(
+              `❌ Error fetching data for agency ${agency.name}:`,
+              error
+            );
+            agencyTimelineData[agency.name] = [];
+            agencyAwardsData[agency.name] = [];
+          }
+        })
+      );
 
       console.log('🎯 Final agency timeline data keys:', Object.keys(agencyTimelineData));
       console.log('🎯 Final agency timeline data structure:', agencyTimelineData);

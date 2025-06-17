@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Building, Users, MapPin } from 'lucide-react';
 import { marketDefinitionService } from '@/lib/services/market-definition';
 import { dashboardDataService } from '@/lib/services/dashboard-data';
@@ -16,7 +16,15 @@ import MetricsCard from './MetricsCard';
 import InvestmentSeries from './InvestmentSeries';
 import DateRangeSelector from './DateRangeSelector';
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+  initialMarketData?: MarketOverview;
+  initialFundingOfficeData?: FundingOfficeAnalysis;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({
+  initialMarketData,
+  initialFundingOfficeData
+}) => {
   const [state, setState] = useState<DashboardState>({
     selectedMarket: 'Electronic Warfare',
     selectedAgency: null,
@@ -34,14 +42,15 @@ const Dashboard: React.FC = () => {
 
   const [timelineViewMode, setTimelineViewMode] = useState<'single' | 'stacked'>('single');
 
-  const [marketData, setMarketData] = useState<MarketOverview | null>(null);
-  const [fundingOfficeData, setFundingOfficeData] = useState<FundingOfficeAnalysis | null>(null);
-  const [filteredTimelineData, setFilteredTimelineData] = useState<{results: TimelineDataPoint[]} | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [marketData, setMarketData] = useState<MarketOverview | null>(initialMarketData || null);
+  const [fundingOfficeData, setFundingOfficeData] = useState<FundingOfficeAnalysis | null>(initialFundingOfficeData || null);
+  const [filteredTimelineData, setFilteredTimelineData] = useState<{ results: TimelineDataPoint[] } | null>(null);
+  const [loading, setLoading] = useState(!initialMarketData);
   const [error, setError] = useState<string | null>(null);
   const [timelineLoading, setTimelineLoading] = useState(false);
 
   const markets = marketDefinitionService.getAllMarkets();
+  const firstLoad = useRef(true);
 
   useEffect(() => {
     console.log('🔄 Main data effect triggered:', {
@@ -84,8 +93,17 @@ const Dashboard: React.FC = () => {
       }
     };
 
+    if (firstLoad.current) {
+      firstLoad.current = false;
+      if (initialMarketData && initialFundingOfficeData) {
+        // Data already provided via props; no need to fetch
+        setLoading(false);
+        return;
+      }
+    }
+
     fetchData();
-  }, [state.selectedMarket, state.dateRange]);
+  }, [state.selectedMarket, state.dateRange, initialMarketData, initialFundingOfficeData]);
 
   // Initialize selections when data loads - start with all agencies/funding offices selected (only on first load)
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -156,42 +174,9 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    console.log('⚠️ No pre-fetched data found for:', {
-      selectedAgency: state.selectedAgency,
-      selectedFundingOffice: state.selectedFundingOffice,
-      hasAgencyData: !!marketData.agencyTimelineData,
-      hasFundingOfficeData: !!marketData.fundingOfficeTimelineData,
-      agencyKeys: Object.keys(marketData.agencyTimelineData || {}),
-      fundingOfficeKeys: Object.keys(marketData.fundingOfficeTimelineData || {})
-    });
-
-    // Fallback: fetch data if not pre-fetched (shouldn't happen with new implementation)
-    const fetchFilteredData = async () => {
-      try {
-        console.log('⚠️ Fallback: Fetching timeline data (not pre-fetched)');
-
-        const filteredData = await dashboardDataService.getFilteredTimelineData(
-          state.selectedMarket,
-          state.selectedAgency,
-          state.selectedFundingOffice,
-          state.dateRange.startDate,
-          state.dateRange.endDate,
-          state.dateRange.isQuickSelection
-        );
-
-        setFilteredTimelineData(filteredData);
-        console.log('✅ Fallback timeline data fetched');
-      } catch (error) {
-        console.error('Error fetching filtered timeline data:', error);
-        // Fallback to full timeline data if filtering fails
-        const fallbackData = { results: marketData.timelineData };
-        setFilteredTimelineData(fallbackData);
-      } finally {
-        setTimelineLoading(false);
-      }
-    };
-
-    fetchFilteredData();
+    console.log('⚠️ No pre-fetched data found; using market total timeline');
+    setFilteredTimelineData({ results: marketData.timelineData });
+    setTimelineLoading(false);
   }, [state.selectedAgency, state.selectedFundingOffice, marketData, timelineViewMode, state.selectedMarket, state.dateRange]);
 
   const handleMarketChange = (market: string) => {
